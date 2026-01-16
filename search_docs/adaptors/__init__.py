@@ -1,0 +1,1 @@
+from .default_search_adapter import DefaultSearchAdapter

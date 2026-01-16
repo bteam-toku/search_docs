@@ -1,0 +1,8 @@
+# --- パス設定 ---
+# プロジェクトルートディレクトリからの相対パスで指定。Docker環境では /data 以下にマウントされます。
+output_path: "output"
+keyword_path: "input/keywords.txt"
+
+# --- 動作設定 ---
+progress_display: true      # 進捗表示有無設定(True:表示, False:非表示)
+shape_search: true         # 要素検索有無設定(True:実行, False:非実行)

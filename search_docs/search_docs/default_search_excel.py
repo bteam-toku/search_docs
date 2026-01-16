@@ -1,103 +1,121 @@
-from .abstract_search_docs import AbstractSearchDocs
-import os
+from  search_docs.search_docs import AbstractSearchDocs
 import pandas as pd
 import openpyxl
 import win32com.client
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+import os
+from bteam_utils import CommonProgress
 
-class BaseSearchExcel(AbstractSearchDocs):
-    """EXCEL検索基底抽象クラス
+class DefaultSearchExcel(AbstractSearchDocs):
+    """Excelドキュメント検索クラス
     """
-    _is_search_shapes : bool = False # 図形内テキスト検索フラグ
-    excel_extension = ['.xlsx', '.xlsm', '.xls'] # Excelファイルの拡張子リスト
+    _doc_type: str = 'Excel'                        # ドキュメントタイプをoverride
+    _extensions: list = ['.xls', '.xlsx', '.xlsm']  # 対応拡張子リストをoverride
 
-    def __init__(self) -> None:
+    #
+    # constructor/destructor
+    #
+    def __init__(self, enable_progress: bool = True) -> None:
         """コンストラクタ
         """
-        super().__init__()
+        super().__init__(enable_progress)
 
     def __del__(self) -> None:
         """デストラクタ
         """
-        pass
+        super().__del__()
 
-    def search_target(self, target_path:str, progress:bool=True) -> bool:
-        """対象検索処理
+    #
+    # public methods
+    #
+    def search_element(self, target_path:str) -> bool:
+        """ドキュメント要素検索処理
         Args:
             target_path (str): 検索対象パス
-            progress (bool): 進捗表示フラグ
 
         Returns:
             bool: True:成功, False:失敗
         """
-        # excelファイルリストを取得
+        # 初期化
         excel_files = []
+
+        # フォルダ内のexcelファイルリストを取得
         for root, dirs, files in os.walk(target_path):
             for file in files:
                 # 拡張子がExcelファイルの場合
-                if file.endswith(tuple(self.excel_extension)):
+                if file.endswith(tuple(self._extensions)):
                     excel_files.append(os.path.join(root, file))
 
-        # exelファイルがある場合はシート名リストを取得
+        # excelファイルがある場合はシート名リストを取得
         if len(excel_files) > 0:
-            self._search_sheet_list(excel_files, progress)
+            self._search_sheet_list(excel_files)
+
+        # 検索結果に行が存在する場合はTrueを返す
+        if not self._pd_element.empty:
             return True
         else:
             return False
 
-    def search_keyword(self, keywords:str, progress:bool=True) -> bool:
+    def search_keyword(self, keywords:list, enable_search_shapes: bool = False) -> bool:
         """キーワード検索処理
+
+        このメソッドは、事前にsearch_elementメソッドが実行されていることを前提としています。
+
         Args:
-            keywords (str): 検索キーワード
-            progress (bool): 進捗表示フラグ
+            keywords (list): 検索キーワード
+            enable_search_shapes (bool): 図形内テキスト検索有効フラグ
 
         Returns:
             bool: True:成功, False:失敗
         """
         # キーワードがない場合は終了
-        if keywords is None or len(keywords) == 0:
+        if not keywords or len(keywords) == 0:
             return False
-        # 対象検索結果がない場合は終了
-        if self._pd_target is None or self._pd_target.empty:
+        # 要素検索結果がない場合は終了
+        if self._pd_element is None or self._pd_element.empty:
             return False
         
-        # キーワード検索結果を対象検索結果で初期化して、キーワードのカラムを追加
-        self._pd_keyword = self._pd_target.copy(deep=True)
+        # キーワード検索結果を要素検索結果で初期化
+        self._pd_keyword = self._pd_element.copy(deep=True)
+        # キーワード列を追加
         for keyword in keywords:
             self._pd_keyword[keyword] = None
 
         # CELL内テキスト検索を実行
         self._search_keyword_cell(keywords)
-        # 図形内テキスト検索を実行
-        if self._is_search_shapes:
-            self._search_keyword_shape(keywords)
-    
-    def enable_search_shapes(self, enable:bool=True) -> None:
-        """図形内テキスト検索の有効/無効設定
-        Args:
-            enable (bool): True:有効, False:無効
-        """
-        self._is_search_shapes = enable
 
+        # 図形内テキスト検索を実行
+        if enable_search_shapes:
+            self._search_keyword_shape(keywords)
+        
+        # キーワード検索結果に行が存在する場合はTrueを返す
+        if self._pd_keyword is not None and not self._pd_keyword.empty:
+            return True
+        else:
+            return False
+        
     #
     # protected methods
     #
-    def _search_sheet_list(self, files:list, is_progress:bool=True) -> None:
+    def _search_sheet_list(self, files:list) -> None:
         """
         シート名リスト取得
         Args:
             files (list): excelファイルのリスト（フルパス）
-            progress (bool): 進捗表示フラグ
         """
-        # Sheet名リストを取得
+
+        # 初期化
         progress_max = len(files)
         rows = []
         workbook = None
+        # 進捗表示用フラグを初期化
+        progress = CommonProgress(total=progress_max, task_msg=self._doc_type+' Sheets') if self._enable_progress else None
 
+        # ファイルごとにシート名を取得
         for i, file in enumerate(files, 1):
-            file_name = os.path.basename(file)
             file_path = os.path.dirname(file)
+            file_name = os.path.basename(file)
             try:
                 # ブックを開く
                 workbook = openpyxl.load_workbook(file, read_only=True, data_only=True)
@@ -110,46 +128,49 @@ class BaseSearchExcel(AbstractSearchDocs):
                         'Sheet':sheetname
                     })
             except :
+                # ファイルが開けない場合はエラーメッセージを登録
                 rows.append({
                     'Path':file_path,
                     'Book':file_name,
                     'Sheet':"Bad File Error"
                 })
             finally:
+                # workbookを閉じる
                 if workbook is not None:
                     workbook.close()
                     workbook = None
+
             # 進捗表示
-            if is_progress:
-                percent = round((i / progress_max) * 100)
-                self.show_progress(percent, 'Sheets検索', f'{i}/{progress_max}')
-        # 列名を設定
-        self._pd_target = pd.DataFrame(rows, columns=['Path','Book','Sheet'])
-        # 0を空文字に置換
-        output_df = self._pd_target.replace(0, "")
-        self._pd_target = output_df
+            if progress:
+                progress.update(current=i, status_msg=f'Processing: {i}/{progress_max}')
+
+        # 列名を設定（0を空文字に置換）
+        self._pd_element = pd.DataFrame(rows, columns=['Path','Book','Sheet']).replace(0, "")
 
         # 進捗表示(100%)
-        if is_progress and percent < 100:
-            self.show_progress(100, 'Sheets検索', '完了しました')
+        if progress:
+            progress.update(current=progress_max, status_msg='Completed')
     
-    def _search_keyword_cell(self, keywords:list, is_progress:bool=True) -> None:
+    def _search_keyword_cell(self, keywords:list) -> None:
         """キーワード検索処理
         Args:
             keywords (list): 検索キーワードリスト
         """
         # 進捗データ初期化
-        progress = 0
+        progress_cnt = 0
         progress_max = self._pd_keyword.shape[0]
-
-        # ブック＋シートでキーワードを検索する
         workbook= None
         current_workbook_path = None
+        # 進捗表示用フラグを初期化
+        progress = CommonProgress(total=progress_max, task_msg=self._doc_type+' Keyword in Cells') if self._enable_progress else None
 
+        # ブック＋シートでキーワードを検索する
         for output_index, output_row in self._pd_keyword.iterrows():
             # Bad Fileの場合はスキップ
             if output_row['Sheet'] == "Bad File Error":
-                progress += 1
+                progress_cnt += 1
+                if progress:
+                    progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
                 continue
             
             # フルパスを生成してOpen済みか確認
@@ -165,8 +186,12 @@ class BaseSearchExcel(AbstractSearchDocs):
                 except:
                     # ファイルが開けない場合はスキップ
                     workbook = None
+
+            # ブックが開けなかった場合はスキップ
             if workbook is None:
-                progress += 1
+                progress_cnt += 1
+                if progress:
+                    progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
                 continue
 
             # シートを指定する
@@ -174,43 +199,47 @@ class BaseSearchExcel(AbstractSearchDocs):
 
             # キーワードカウント用辞書を初期化
             keyword_counts = {keyword:0 for keyword in keywords}
+            # 既存のキーワードカウントを取得
             for keyword in keywords:
                 val = self._pd_keyword.at[output_index, keyword]
                 if val is not None and val != "":
                     keyword_counts[keyword] = val
+
             # キーワードがシート内に含まれているかチェックする
             for row in worksheet.iter_rows(values_only=True):
+                # セルごとにチェック
                 for cell in row:
                     if cell is None:
                         continue
                     cell_str = str(cell)
+                    # キーワードごとにチェック
                     for keyword in keywords:
                         if keyword in cell_str:
                             keyword_counts[keyword] += 1
+
             # キーワードカウントをDataFrameに設定
             for keyword, count in keyword_counts.items():
                 self._pd_keyword.at[output_index, keyword] = count
 
             # 進捗表示
-            if is_progress:
-                progress += 1
-                percent = round((progress / progress_max) * 100)
-                self.show_progress(percent, 'セル内キーワード検索', f'{progress}/{progress_max}')
+            progress_cnt += 1
+            if progress:
+                progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
 
         # 0を空文字に置換
-        output_df = self._pd_keyword.replace(0, "")
-        self._pd_keyword = output_df
+        self._pd_keyword = self._pd_keyword.replace(0, "")
 
         # workbookを閉じる
         if workbook is not None:
             workbook.close()
 
         # 進捗表示(100%)
-        if is_progress and percent < 100:
-            self.show_progress(100, 'セル内キーワード検索', '完了しました')
+        if progress:
+            progress.update(current=progress_max, status_msg='Completed')
     
-    def _search_keyword_shape(self, keywords:list, is_progress:bool=True) -> None:
+    def _search_keyword_shape(self, keywords:list) -> None:
         """キーワード検索
+
         図形内のテキストにキーワードが含まれる箇所をカウントする
 
         Args:
@@ -222,22 +251,29 @@ class BaseSearchExcel(AbstractSearchDocs):
         excel.DisplayAlerts = False
 
         # 進捗データ初期化
-        progress = 0
+        progress_cnt = 0
         progress_max = self._pd_keyword.shape[0]
-        # ブック＋シートでキーワードを検索する
         workbook = None
         current_workbook_path = None
+        # 進捗表示用フラグを初期化
+        progress = CommonProgress(total=progress_max, task_msg=self._doc_type+' Keyword in Shapes') if self._enable_progress else None
 
         try:
+            # ブック＋シートでキーワードを検索する
             for output_index, output_row in self._pd_keyword.iterrows():
                 try:
                     # Bad Fileの場合はスキップ
                     if output_row['Sheet'] == "Bad File Error":
+                        progress_cnt += 1
+                        if progress:
+                            progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
                         continue
 
+                    # フルパスを生成してOpen済みか確認してブックを開く 
                     full_workbook_path = os.path.abspath(os.path.join(output_row['Path'], output_row['Book']))
-                    # ブックを開く（一度開いている場合はスキップする)
+                    # 既に開いているブックと異なる場合は新たに開く
                     if(full_workbook_path != current_workbook_path):
+                        # 既に開いているブックがあれば閉じる
                         if current_workbook_path is not None:
                             workbook.Close(SaveChanges=False)
                         current_workbook_path = full_workbook_path
@@ -247,8 +283,12 @@ class BaseSearchExcel(AbstractSearchDocs):
                         except:
                             # ファイルが開けない場合はスキップ
                             workbook = None
+
+                    # ブックが開けなかった場合はスキップ
                     if workbook is None:
-                        progress += 1
+                        progress_cnt += 1
+                        if progress:
+                            progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
                         continue
 
                     # シートを指定する
@@ -256,10 +296,11 @@ class BaseSearchExcel(AbstractSearchDocs):
 
                     # キーワードがシート内に含まれているかチェックする
                     for keyword in keywords:
+                        # キーワード出現回数を初期化
                         count = 0 if self._pd_keyword.at[output_index, keyword] in (None, "") else self._pd_keyword.at[output_index, keyword]
                         # シート内の図形のテキストをチェック
                         for shape in worksheet.Shapes:
-                            # if shape.HasTextFrame:
+                            # グループ化された図形も再帰的にチェック
                             try:
                                 count += self._search_keyword_shape_group(shape, keyword)
                             except:
@@ -269,14 +310,12 @@ class BaseSearchExcel(AbstractSearchDocs):
                     pass
 
                 # 進捗表示
-                if is_progress:
-                    progress += 1
-                    percent = round((progress / progress_max) * 100)
-                    self.show_progress(percent, '図形内キーワード検索', f'{progress}/{progress_max}')
+                progress_cnt += 1
+                if progress:
+                    progress.update(current=progress_cnt, status_msg=f'Processing: {progress_cnt}/{progress_max}')
         finally:
             # 0を空文字に置換
-            output_df = self._pd_keyword.replace(0, "")
-            self._pd_keyword = output_df
+            self._pd_keyword = self._pd_keyword.replace(0, "")
 
             # Excelアプリケーションを終了
             try:
@@ -290,15 +329,22 @@ class BaseSearchExcel(AbstractSearchDocs):
                 pass
             del excel
             # 進捗表示(100%)
-            if is_progress and percent < 100:
-                self.show_progress(100, '図形内キーワード検索', '完了しました')
+            if progress:
+                progress.update(current=progress_max, status_msg='Completed')
 
     def _search_keyword_shape_group(self, shape, keyword) -> int:
-            """グループ化された図形を再帰的にチェックするサブメソッド"""
+            """グループ化された図形を再帰的にチェックするサブメソッド
+            Args:
+                shape: 図形オブジェクト
+                keyword (str): 検索キーワード
+            Returns:
+                int: キーワード出現回数
+            """
             count = 0
             # Type 6 は msoGroup (グループ化された図形)
             if shape.Type == 6:
                 try:
+                    # グループ内の図形を再帰的にチェック
                     for sub_shape in shape.GroupItems:
                         count += self._search_keyword_shape_group(sub_shape, keyword)
                 except:
@@ -307,9 +353,11 @@ class BaseSearchExcel(AbstractSearchDocs):
                 try:
                     # テキストを持っているか判定
                     if shape.HasTextFrame:
+                        # テキストを取得してキーワードが含まれるかチェック
                         txt = shape.TextFrame.Characters().Text
                         if txt and keyword in txt:
                             count += 1
                 except:
                     pass
+            # キーワード出現回数を返す
             return count
