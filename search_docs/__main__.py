@@ -1,10 +1,7 @@
-from search_docs.interfaces import AbstractSearch
 from search_docs.factories import Factory
 from search_docs.config import Config
 import os
 import argparse
-from datetime import datetime
-
 
 def main():
     """メイン処理

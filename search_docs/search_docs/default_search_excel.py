@@ -1,4 +1,4 @@
-from  search_docs.search_docs import AbstractSearchDocs
+from  search_docs.interfaces import AbstractSearchDocs
 import pandas as pd
 import openpyxl
 import win32com.client
@@ -109,7 +109,7 @@ class DefaultSearchExcel(AbstractSearchDocs):
         progress_max = len(files)
         rows = []
         workbook = None
-        # 進捗表示用フラグを初期化
+        # 進捗表示用を初期化
         progress = CommonProgress(total=progress_max, task_msg=self._doc_type+' Sheets') if self._enable_progress else None
 
         # ファイルごとにシート名を取得

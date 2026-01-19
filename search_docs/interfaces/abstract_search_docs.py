@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import os
 import pandas as pd
 
 class AbstractSearchDocs(ABC):

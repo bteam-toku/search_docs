@@ -1,5 +1,5 @@
 from search_docs.interfaces import AbstractSearch
-from search_docs.search_docs import AbstractSearchDocs
+from search_docs.interfaces import AbstractSearchDocs
 from typing import Optional, List, Type
 import os
 

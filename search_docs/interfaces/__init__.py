@@ -1,1 +1,2 @@
 from .abstract_search import AbstractSearch
+from .abstract_search_docs import AbstractSearchDocs

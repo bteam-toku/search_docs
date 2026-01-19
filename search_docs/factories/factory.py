@@ -1,4 +1,5 @@
 from search_docs.interfaces import AbstractSearch
+from search_docs.interfaces import AbstractSearchDocs
 from search_docs.config import Config
 from typing import Type, Optional, List
 import importlib
@@ -42,7 +43,7 @@ class Factory:
         if adaptor_type_name is None:
             # デフォルトで必要なモジュールをインポート
             from search_docs.adaptors import DefaultSearchAdapter
-            from search_docs.search_docs import AbstractSearchDocs, DefaultSearchExcel
+            from search_docs.search_docs import DefaultSearchExcel
             # adaptor_type_nameが指定されていない場合はデフォルトのアダプターを使用
             # デフォルトのドキュメント検索クラスリストを作成
             default_search_docs: List[AbstractSearchDocs] = [DefaultSearchExcel(config.get("progress_display", True))]
