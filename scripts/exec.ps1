@@ -8,7 +8,7 @@ function Invoke-Batch {
     param (
         [string]$target_path
     )
-    py -m search_docs $target_path
+    uv run search $target_path
 }
 
 # redmine_exportの実行

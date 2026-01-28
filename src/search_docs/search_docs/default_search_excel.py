@@ -149,7 +149,7 @@ class DefaultSearchExcel(AbstractSearchDocs):
 
         # 進捗表示(100%)
         if progress:
-            progress.update(current=progress_max, status_msg='Completed')
+            progress.complete()
     
     def _search_keyword_cell(self, keywords:list) -> None:
         """キーワード検索処理
@@ -235,7 +235,7 @@ class DefaultSearchExcel(AbstractSearchDocs):
 
         # 進捗表示(100%)
         if progress:
-            progress.update(current=progress_max, status_msg='Completed')
+            progress.complete()
     
     def _search_keyword_shape(self, keywords:list) -> None:
         """キーワード検索
@@ -330,7 +330,7 @@ class DefaultSearchExcel(AbstractSearchDocs):
             del excel
             # 進捗表示(100%)
             if progress:
-                progress.update(current=progress_max, status_msg='Completed')
+                progress.complete()
 
     def _search_keyword_shape_group(self, shape, keyword) -> int:
             """グループ化された図形を再帰的にチェックするサブメソッド

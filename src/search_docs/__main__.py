@@ -2,6 +2,7 @@ from search_docs.factories import Factory
 from search_docs.config import Config
 import os
 import argparse
+from bteam_utils import CommonProgress
 
 def main():
     """メイン処理
@@ -42,7 +43,12 @@ def main():
     # ドキュメント検索処理の実行
     seacher.search(target_path=target_path, keywords=keywords, enable_search_shapes=config.shape_search())
     # 検索結果保存処理の実行
+    if config.progress_display():
+        progress = CommonProgress(total=1, task_msg='Saving Results')
+        progress.update(current=0, status_msg='Processing')
     seacher.save_results(output_path=output_path)
+    if config.progress_display():
+        progress.complete()
 
 if __name__ == "__main__":
     main()

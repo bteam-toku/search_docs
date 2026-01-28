@@ -5,8 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "search_docs"
 version = "0.1.0"
-
-# 依存ライブラリ
+requires-python = ">=3.14"
 dependencies = [
     "pandas",
     "openpyxl",
@@ -15,5 +14,10 @@ dependencies = [
     "bteam_utils @ git+https://github.com/bteam-toku/bteam_utils.git",
 ]
 
+[project.scripts]
+search = "search_docs.__main__:main"
+search_docs = "search_docs.__main__:main"
+
 [tool.setuptools]
-packages = { find = {} }
+package-dir = { "" = "src" }
+packages = { find = { where = ["src"] } }

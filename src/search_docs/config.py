@@ -13,7 +13,7 @@ class Config:
         """コンストラクタ
         """
         # ベースパスの初期化
-        self._base_path = pathlib.Path(__file__).parent.parent.resolve()
+        self._base_path = pathlib.Path.cwd()
         # 環境変数からDocker環境フラグの初期化
         self._is_docker = os.getenv('IS_DOCKER', 'false').lower() == 'true'
         # settings.yamlファイルパスの初期化
